@@ -1,4 +1,4 @@
-package locks
+package chanlock
 
 import (
 	"context"

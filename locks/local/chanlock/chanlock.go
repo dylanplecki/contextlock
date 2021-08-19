@@ -1,4 +1,4 @@
-package locks
+package chanlock
 
 import (
 	"context"
@@ -14,7 +14,7 @@ const (
 
 // ChanLock implements a contextlock.ContextLocker that uses a Go channel to
 // provide atomic locking and unlocking with context.Context cancellation
-// support.
+// support. This lock is resolved locally and does not require network calls.
 type ChanLock struct {
 	// Use a sync.Mutex struct to prevent ChanLock struct copying.
 	_ sync.Mutex
