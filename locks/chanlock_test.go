@@ -45,6 +45,8 @@ func TestChanLock_LockUnlockGoRoutines(t *testing.T) {
 		// Wait for the second goroutine to start and wait on lock acquisition.
 		time.Sleep(500 * time.Millisecond)
 		sleepEnd = time.Now()
+		// Wait for the internal clock to tick forward a bit before releasing.
+		time.Sleep(10 * time.Millisecond)
 		require.NoError(t, lock.ContextUnlock(ctx))
 	}()
 
