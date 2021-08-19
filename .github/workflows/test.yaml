@@ -57,3 +57,4 @@ jobs:
           token: 9d023a81-acb8-41a3-9684-80dac3c91c8c
           file: ./coverage.txt
           flags: unittests
+        if: runner.os == 'Linux'
