@@ -1,4 +1,6 @@
+---
 name: Test
+
 on:
   push:
     tags:
@@ -7,6 +9,7 @@ on:
       - master
       - main
   pull_request:
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -16,6 +19,7 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           only-new-issues: true
+
   test:
     strategy:
       matrix:
