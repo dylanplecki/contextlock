@@ -6,7 +6,7 @@ import (
 )
 
 // ContextLocker extends the sync.Locker interface to support two new
-// lock/unlock methods, LockContext and UnlockContext. These methods perform
+// lock/unlock methods, ContextLock and ContextUnlock. These methods perform
 // similar operations (and are directly compatible with) the original Lock and
 // Unlock methods, but accept an additional context.Context argument used to
 // terminate lock acquisition attempts prematurely.
@@ -21,19 +21,19 @@ import (
 //
 // The sync.Locker interface is fully compatible with the new context-compatible
 // ContextLocker methods. Thus, it is acceptable for a caller to call Lock then
-// UnlockContext, or call LockContext then Unlock.
+// ContextUnlock, or call ContextLock then Unlock.
 type ContextLocker interface {
 	sync.Locker
 
-	// LockContext provides exclusive control of the ContextLocker object if and
+	// ContextLock provides exclusive control of the ContextLocker object if and
 	// only if the error returned is nil. A subsequent call to Unlock or
-	// UnlockContext from any goroutine will release control of the
+	// ContextUnlock from any goroutine will release control of the
 	// ContextLocker object.
-	LockContext(ctx context.Context) error
+	ContextLock(ctx context.Context) error
 
-	// UnlockContext releases control of the ContextLocker object. If the
+	// ContextUnlock releases control of the ContextLocker object. If the
 	// ContextLocker has not been locked prior to this call via either Lock o
-	// LockContext, the behavior of this method is undefined, but may likely
+	// ContextLock, the behavior of this method is undefined, but may likely
 	// panic.
-	UnlockContext(ctx context.Context) error
+	ContextUnlock(ctx context.Context) error
 }
