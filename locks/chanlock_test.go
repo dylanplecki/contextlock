@@ -17,7 +17,7 @@ func TestChanLock_LockUnlock(t *testing.T) {
 
 	// Attempt without context.
 	lock.Lock()
-	lock.Unlock()
+	lock.Unlock() //nolint:staticcheck // Ignore SA2001: empty critical section.
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
