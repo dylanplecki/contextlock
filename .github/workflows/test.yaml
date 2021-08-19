@@ -8,6 +8,14 @@ on:
       - main
   pull_request:
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          only-new-issues: true
   test:
     strategy:
       matrix:
@@ -41,13 +49,6 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
-      - name: Go Lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          only-new-issues: true
-          skip-go-installation: true
-          skip-pkg-cache: true
-          skip-build-cache: true
       - name: Go Test
         run: go test ./... -coverprofile=coverage.txt -covermode=atomic
       - name: Upload Coverage Report
