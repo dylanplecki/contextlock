@@ -1,0 +1,21 @@
+---
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - depguard
+    - errcheck
+    - gosimple
+    - ineffassign
+    - misspell
+    - nakedret
+    - scopelint
+    - staticcheck
+    - structcheck
+    - unconvert
+    - unused
+    - varcheck
+
+issues:
+  exclude-use-default: false
