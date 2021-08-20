@@ -15,6 +15,7 @@ func TestChanLock(t *testing.T) {
 
 	contextlocktest.RunContextLockTestSuite(t, context.Background(),
 		func(t *testing.T) contextlock.ContextLocker { return NewChanLock() },
+		1, /* timeoutScaleFactor */
 	)
 }
 

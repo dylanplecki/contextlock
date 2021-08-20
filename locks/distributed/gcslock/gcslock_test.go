@@ -42,7 +42,7 @@ func TestGCSLock(t *testing.T) {
 		return lock
 	}
 
-	contextlocktest.RunContextLockTestSuite(t, context.Background(), lockFactory)
+	contextlocktest.RunContextLockTestSuite(t, context.Background(), lockFactory, 5 /* timeoutScaleFactor */)
 }
 
 func TestGCSLock_ForceUnlockContext(t *testing.T) {
@@ -71,7 +71,7 @@ func TestGCSLock_ForceUnlockContext(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	// First, have lockA acquire the shared lock object.
@@ -102,7 +102,7 @@ func TestGCSLock_ForceUnlockContextError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	// Expect a context timeout error.
@@ -119,7 +119,7 @@ func TestGCSLock_NotInitialized(t *testing.T) {
 	require.Panicsf(t, func() { lock.Lock() }, "Lock should panic when uninitialized")
 	require.Panicsf(t, func() { lock.Unlock() }, "Unlock should panic when uninitialized")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	// Attempt with context.
@@ -142,7 +142,7 @@ func TestGCSLock_CustomBackoff(t *testing.T) {
 	gcsMockServer.SetForceError(errors.New("uh-oh, it looks like we're having problems!"))
 
 	var backOffGenerator BackOffGenerator = func() backoff.BackOff {
-		return &backoff.ConstantBackOff{Interval: time.Second}
+		return &backoff.ConstantBackOff{Interval: 10 * time.Second}
 	}
 
 	lock, err := NewGCSLock(
@@ -154,7 +154,7 @@ func TestGCSLock_CustomBackoff(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	require.Error(t, lock.LockContext(ctx))

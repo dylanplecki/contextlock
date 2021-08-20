@@ -17,6 +17,7 @@ func RunContextLockTestSuite(
 	t *testing.T,
 	parentContext context.Context,
 	lockFactory LockFactory,
+	timeoutScaleFactor uint,
 ) {
 	t.Run("lock and unlock", func(t *testing.T) {
 		t.Parallel()
@@ -26,7 +27,7 @@ func RunContextLockTestSuite(
 		lock.Lock()
 		lock.Unlock() //nolint:staticcheck // Ignore SA2001: empty critical section.
 
-		ctx, cancel := context.WithTimeout(parentContext, 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(parentContext, 100*time.Millisecond*time.Duration(timeoutScaleFactor))
 		defer cancel()
 
 		// Attempt with context.
@@ -38,7 +39,7 @@ func RunContextLockTestSuite(
 		t.Parallel()
 		lock := lockFactory(t)
 
-		ctx, cancel := context.WithTimeout(parentContext, 3*time.Second)
+		ctx, cancel := context.WithTimeout(parentContext, 3*time.Second*time.Duration(timeoutScaleFactor))
 		defer cancel()
 
 		var sleepEnd time.Time
@@ -49,17 +50,17 @@ func RunContextLockTestSuite(
 			defer wg.Done()
 			require.NoError(t, lock.LockContext(ctx))
 			// Wait for the second goroutine to start and wait on lock acquisition.
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond * time.Duration(timeoutScaleFactor))
 			sleepEnd = time.Now()
 			// Wait for the internal clock to tick forward a bit before releasing.
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond * time.Duration(timeoutScaleFactor))
 			require.NoError(t, lock.UnlockContext(ctx))
 		}()
 
 		go func() {
 			defer wg.Done()
 			// Wait until the first goroutine acquires the lock.
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond * time.Duration(timeoutScaleFactor))
 			require.NoError(t, lock.LockContext(ctx))
 			assert.True(t, time.Now().After(sleepEnd),
 				"second goroutine critical section entered before first goroutine released the lock")
@@ -73,7 +74,7 @@ func RunContextLockTestSuite(
 		t.Parallel()
 		lock := lockFactory(t)
 
-		ctx, cancel := context.WithTimeout(parentContext, 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(parentContext, 100*time.Millisecond*time.Duration(timeoutScaleFactor))
 		defer cancel()
 
 		require.NoError(t, lock.LockContext(ctx))
