@@ -58,8 +58,8 @@ be located across a network of other computers.
 These distributed locks can come in several localities and may have configurable scopes, meaning that locks can be
 acquired and released across specific subsets of computers with varying performance implications.
 
-Typically, distributed locks tend to be far slower than local locks.
+Typically, distributed locks tend to be far slower than local locks due to network latency.
 
-**Available Local Locks:**
+**Available Distributed Locks:**
 
 - [`GCSLock`](https://pkg.go.dev/github.com/dylanplecki/contextlock/locks/distributed/gcslock#GCSLock) - A globally-distributed, fault-tolerant lock using Google Cloud Storage.
