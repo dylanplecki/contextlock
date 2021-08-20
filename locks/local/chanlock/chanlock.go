@@ -2,10 +2,10 @@ package chanlock
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/dylanplecki/contextlock"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -47,8 +47,8 @@ func (cl *ChanLock) Lock() {
 	cl.channel <- struct{}{}
 }
 
-// ContextLock implements contextlock.ContextLocker.
-func (cl *ChanLock) ContextLock(ctx context.Context) error {
+// LockContext implements contextlock.ContextLocker.
+func (cl *ChanLock) LockContext(ctx context.Context) error {
 	if err := cl.checkInit(); err != nil {
 		return err
 	}
@@ -68,8 +68,8 @@ func (cl *ChanLock) Unlock() {
 	<-cl.channel
 }
 
-// ContextUnlock implements contextlock.ContextLocker.
-func (cl *ChanLock) ContextUnlock(ctx context.Context) error {
+// UnlockContext implements contextlock.ContextLocker.
+func (cl *ChanLock) UnlockContext(ctx context.Context) error {
 	if err := cl.checkInit(); err != nil {
 		return err
 	}
