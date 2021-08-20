@@ -12,11 +12,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/dylanplecki/contextlock"
 	"github.com/dylanplecki/contextlock/internal/contextlocktest"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -68,7 +71,7 @@ func TestGCSLock_ForceUnlockContext(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	// First, have lockA acquire the shared lock object.
@@ -81,10 +84,35 @@ func TestGCSLock_ForceUnlockContext(t *testing.T) {
 	require.NoError(t, lockB.ForceUnlockContext(ctx))
 }
 
-func TestChanLock_NotInitialized(t *testing.T) {
+func TestGCSLock_ForceUnlockContextError(t *testing.T) {
 	t.Parallel()
 
-	// Uninitialized channel lock (invalid).
+	testBucketName := "test-bucket"
+	testObjectName := fmt.Sprintf("test/%s/object.lock", t.Name())
+
+	gcsMockServer := newMockStorageServer(testBucketName)
+	gcsMockServerURL, err := url.Parse(gcsMockServer.URL)
+	require.NoError(t, err)
+
+	lock, err := NewGCSLock(
+		testBucketName, testObjectName,
+		WithLogger(zap.NewNop()),
+		WithBaseURL(*gcsMockServerURL),
+		WitHTTPClient(gcsMockServer.Client()),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Expect a context timeout error.
+	require.Error(t, lock.ForceUnlockContext(ctx))
+}
+
+func TestGCSLock_NotInitialized(t *testing.T) {
+	t.Parallel()
+
+	// Uninitialized GCS lock (invalid).
 	var lock GCSLock
 
 	// Attempt without context.
@@ -100,12 +128,112 @@ func TestChanLock_NotInitialized(t *testing.T) {
 	require.Error(t, lock.ForceUnlockContext(ctx), _gcsLockUninitializedError)
 }
 
+func TestGCSLock_CustomBackoff(t *testing.T) {
+	t.Parallel()
+
+	testBucketName := "test-bucket"
+	testObjectName := fmt.Sprintf("test/%s/object.lock", t.Name())
+
+	gcsMockServer := newMockStorageServer(testBucketName)
+	gcsMockServerURL, err := url.Parse(gcsMockServer.URL)
+	require.NoError(t, err)
+
+	// Force the mock server to return an error.
+	gcsMockServer.SetForceError(errors.New("uh-oh, it looks like we're having problems!"))
+
+	var backOffGenerator BackOffGenerator = func() backoff.BackOff {
+		return &backoff.ConstantBackOff{Interval: time.Second}
+	}
+
+	lock, err := NewGCSLock(
+		testBucketName, testObjectName,
+		WithLogger(zap.NewNop()),
+		WithBaseURL(*gcsMockServerURL),
+		WitHTTPClient(gcsMockServer.Client()),
+		WithBackOffGenerator(backOffGenerator),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	require.Error(t, lock.LockContext(ctx))
+	assert.Equal(t, uint64(1), gcsMockServer.GetCallCount())
+}
+
+func TestGCSLock_CustomLockFileMetadata(t *testing.T) {
+	t.Parallel()
+
+	testBucketName := "test-bucket"
+	testObjectName := fmt.Sprintf("test/%s/object.lock", t.Name())
+
+	gcsMockServer := newMockStorageServer(testBucketName)
+	gcsMockServerURL, err := url.Parse(gcsMockServer.URL)
+	require.NoError(t, err)
+
+	testLockFileData := []byte("my custom lockfile data")
+	var lockFileMetadataGenerator LockFileMetadataGenerator = func(context.Context) ([]byte, error) {
+		return testLockFileData, nil
+	}
+
+	lock, err := NewGCSLock(
+		testBucketName, testObjectName,
+		WithLogger(zap.NewNop()),
+		WithBaseURL(*gcsMockServerURL),
+		WitHTTPClient(gcsMockServer.Client()),
+		WithLockFileMetadataGenerator(lockFileMetadataGenerator),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	require.NoError(t, lock.LockContext(ctx))
+	defer func() { require.NoError(t, lock.UnlockContext(ctx)) }()
+
+	require.Equal(t, testLockFileData, gcsMockServer.buckets[testBucketName][testObjectName])
+}
+
+func TestGCSLock_CustomLockFileMetadataError(t *testing.T) {
+	t.Parallel()
+
+	testBucketName := "test-bucket"
+	testObjectName := fmt.Sprintf("test/%s/object.lock", t.Name())
+
+	gcsMockServer := newMockStorageServer(testBucketName)
+	gcsMockServerURL, err := url.Parse(gcsMockServer.URL)
+	require.NoError(t, err)
+
+	var lockFileMetadataGenerator LockFileMetadataGenerator = func(context.Context) ([]byte, error) {
+		return nil, errors.New("my lockfile generator error")
+	}
+
+	lock, err := NewGCSLock(
+		testBucketName, testObjectName,
+		WithLogger(zap.NewNop()),
+		WithBaseURL(*gcsMockServerURL),
+		WitHTTPClient(gcsMockServer.Client()),
+		WithLockFileMetadataGenerator(lockFileMetadataGenerator),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	if err := lock.LockContext(ctx); assert.Error(t, err) {
+		assert.Contains(t, err.Error(), "my lockfile generator error")
+	}
+}
+
 type mockStorageServer struct {
 	*httptest.Server
 	*mux.Router
 
 	buckets     map[string]mockStorageBucket
 	bucketsLock sync.Mutex
+
+	forceError  error
+	callCounter atomic.Uint64
 }
 
 type mockStorageBucket map[string][]byte
@@ -137,13 +265,29 @@ func newMockStorageServer(buckets ...string) *mockStorageServer {
 	return s
 }
 
+func (s *mockStorageServer) SetForceError(err error) {
+	s.forceError = err
+}
+
+func (s *mockStorageServer) GetCallCount() uint64 {
+	return s.callCounter.Load()
+}
+
 func (s *mockStorageServer) serveObject(w http.ResponseWriter, req *http.Request) {
+	s.callCounter.Inc()
+
+	if s.forceError != nil {
+		http.Error(w, s.forceError.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	bucketName, err := url.PathUnescape(mux.Vars(req)["bucketName"])
 	if err != nil {
 		http.Error(w,
 			errors.Errorf("invalid bucketName %q", mux.Vars(req)["bucketName"]).Error(),
 			http.StatusBadRequest,
 		)
+		return
 	}
 
 	objectName, err := url.PathUnescape(mux.Vars(req)["objectName"])
@@ -152,6 +296,7 @@ func (s *mockStorageServer) serveObject(w http.ResponseWriter, req *http.Request
 			errors.Errorf("invalid objectName %q", mux.Vars(req)["objectName"]).Error(),
 			http.StatusBadRequest,
 		)
+		return
 	}
 
 	switch req.Method {
@@ -161,6 +306,7 @@ func (s *mockStorageServer) serveObject(w http.ResponseWriter, req *http.Request
 				errors.Wrapf(err, "failed to create object %s:%s", bucketName, objectName).Error(),
 				statusCode,
 			)
+			return
 		}
 
 	case http.MethodDelete:
@@ -169,6 +315,7 @@ func (s *mockStorageServer) serveObject(w http.ResponseWriter, req *http.Request
 				errors.Wrapf(err, "failed to delete object %s:%s", bucketName, objectName).Error(),
 				statusCode,
 			)
+			return
 		}
 
 	default:
